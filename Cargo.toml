@@ -1,0 +1,12 @@
+[package]
+name = "encryption_app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aes-gcm = "0.10"
+rand = "0.8"
+sha2 = "0.10"
+egui = "0.20"
+eframe = "0.20"  # For building native applications with egui
+rfd = "0.10"     # For file dialogs
