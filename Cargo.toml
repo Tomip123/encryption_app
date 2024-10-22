@@ -2,11 +2,24 @@
 name = "encryption_app"
 version = "0.1.0"
 edition = "2021"
+default-run = "encryption_app"
 
 [dependencies]
-aes-gcm = "0.10"
-rand = "0.8"
-sha2 = "0.10"
-egui = "0.20"
-eframe = "0.20"  # For building native applications with egui
-rfd = "0.10"     # For file dialogs
+aes-gcm = "0.10.3"   
+aes = "0.8.4"
+block-cipher = "0.8.0"
+rand = "0.8.5"
+sha2 = "0.10.8"
+eframe = "0.29.1"
+egui = "0.29.1"
+rfd = "0.15"
+chacha20poly1305 = "0.10.1"
+argon2 = "0.5.3"
+
+[lib]
+name = "encryption_app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cli"
+path = "src/bin/cli.rs"

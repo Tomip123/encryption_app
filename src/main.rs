@@ -1,25 +1,22 @@
-use aes_gcm::aead::{Aead, KeyInit, OsRng};
-use aes_gcm::{Aes256Gcm, Key, Nonce}; // AES256-GCM cipher
 use eframe::egui::{self, TextEdit};
-use rand::RngCore;
+use encryption_app::{decrypt_file, encrypt_file, EncryptionAlgorithms};
 use rfd::FileDialog;
-use sha2::{Digest, Sha256};
-use std::fs;
-use std::path::PathBuf;
+use std::path::PathBuf; // Import from lib.rs
 
-fn main() {
+fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions::default();
     eframe::run_native(
         "Rust Encryption App",
         options,
-        Box::new(|_cc| Box::new(EncryptionApp::default())),
-    );
+        Box::new(|_cc| Ok(Box::new(EncryptionApp::default()))),
+    )
 }
 
 struct EncryptionApp {
     file_path: Option<PathBuf>,
     password: String,
     status_message: String,
+    algorithm: EncryptionAlgorithms,
 }
 
 impl Default for EncryptionApp {
@@ -28,12 +25,15 @@ impl Default for EncryptionApp {
             file_path: None,
             password: String::new(),
             status_message: String::new(),
+            algorithm: EncryptionAlgorithms::default(),
         }
     }
 }
 
 impl eframe::App for EncryptionApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        use encryption_app::EncryptionAlgorithms;
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Rust Encryption App");
 
@@ -57,9 +57,39 @@ impl eframe::App for EncryptionApp {
                     .hint_text("Password"),
             );
 
+            ui.separator();
+            ui.label("Select Encryption Algorithm:");
+            egui::ComboBox::from_label("Algorithm")
+                .selected_text(format!("{:?}", self.algorithm))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut self.algorithm,
+                        EncryptionAlgorithms::Aes256Gcm,
+                        "AES-256-GCM",
+                    );
+                    ui.selectable_value(
+                        &mut self.algorithm,
+                        EncryptionAlgorithms::Aes128Gcm,
+                        "AES-128-GCM",
+                    );
+                    ui.selectable_value(
+                        &mut self.algorithm,
+                        EncryptionAlgorithms::ChaCha20Poly1305,
+                        "ChaCha20-Poly1305",
+                    );
+                });
+
             if ui.button("Encrypt").clicked() {
                 if let Some(path) = &self.file_path {
-                    match encrypt_file(path, &self.password) {
+                    let algo = match self.algorithm {
+                        EncryptionAlgorithms::Aes256Gcm => EncryptionAlgorithms::Aes256Gcm,
+                        EncryptionAlgorithms::Aes128Gcm => EncryptionAlgorithms::Aes128Gcm,
+                        EncryptionAlgorithms::ChaCha20Poly1305 => {
+                            EncryptionAlgorithms::ChaCha20Poly1305
+                        }
+                    };
+
+                    match encrypt_file(path, &self.password, algo) {
                         Ok(_) => {
                             self.status_message = "File encrypted successfully.".to_string();
                             self.file_path = None;
@@ -73,7 +103,15 @@ impl eframe::App for EncryptionApp {
 
             if ui.button("Decrypt").clicked() {
                 if let Some(path) = &self.file_path {
-                    match decrypt_file(path, &self.password) {
+                    let algo = match self.algorithm {
+                        EncryptionAlgorithms::Aes256Gcm => EncryptionAlgorithms::Aes256Gcm,
+                        EncryptionAlgorithms::Aes128Gcm => EncryptionAlgorithms::Aes128Gcm,
+                        EncryptionAlgorithms::ChaCha20Poly1305 => {
+                            EncryptionAlgorithms::ChaCha20Poly1305
+                        }
+                    };
+
+                    match decrypt_file(path, &self.password, algo) {
                         Ok(_) => {
                             self.status_message = "File decrypted successfully.".to_string();
                             self.file_path = None;
@@ -89,63 +127,14 @@ impl eframe::App for EncryptionApp {
                 ui.separator();
                 ui.label(&self.status_message);
             }
+
+            // Add a separator before the "Close Program" button
+            ui.separator();
+
+            // Add the "Close Program" button
+            if ui.button("Close Program").clicked() {
+                std::process::exit(0);
+            }
         });
     }
-}
-
-fn derive_key(password: &str) -> Key<Aes256Gcm> {
-    // Hash the password to create a 256-bit key
-    let hash = Sha256::digest(password.as_bytes());
-    // Clone from slice to get an owned Key<Aes256Gcm>
-    Key::<Aes256Gcm>::clone_from_slice(&hash)
-}
-
-fn encrypt_file(path: &PathBuf, password: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let data = fs::read(&path)?;
-
-    // Generate a random nonce
-    let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
-
-    let key = derive_key(password);
-    let cipher = Aes256Gcm::new(&key);
-
-    // Encrypt data
-    let ciphertext = cipher
-        .encrypt(nonce, data.as_ref())
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Encryption failed"))?;
-
-    // Write nonce and ciphertext to a new file with .enc extension
-    let mut output_data = nonce_bytes.to_vec();
-    output_data.extend(ciphertext);
-
-    let mut encrypted_path = path.clone();
-    encrypted_path.set_extension("enc");
-    fs::write(encrypted_path, output_data)?;
-
-    Ok(())
-}
-
-fn decrypt_file(path: &PathBuf, password: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let data = fs::read(&path)?;
-
-    // Split the nonce and ciphertext
-    let (nonce_bytes, ciphertext) = data.split_at(12);
-    let nonce = Nonce::from_slice(nonce_bytes);
-
-    let key = derive_key(password);
-    let cipher = Aes256Gcm::new(&key);
-
-    // Decrypt data
-    let plaintext = cipher
-        .decrypt(nonce, ciphertext)
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Decryption failed"))?;
-
-    // Write plaintext to a new file with .dec extension
-    let mut decrypted_path = path.clone();
-    decrypted_path.set_extension("dec");
-    fs::write(decrypted_path, plaintext)?;
-
-    Ok(())
 }
