@@ -7,7 +7,7 @@ use rand::RngCore;
 use std::fs;
 use std::path::PathBuf;
 
-const SALT_LEN: usize = 16;
+const SALT_LEN: usize = 32;
 const NONCE_LEN: usize = 12;
 
 // Enum for encryption algorithms
