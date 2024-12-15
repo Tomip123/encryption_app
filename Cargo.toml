@@ -6,16 +6,14 @@ default-run = "encryption_app"
 
 [dependencies]
 aes-gcm = "0.10.3"   
-aes = "0.8.4"
-block-cipher = "0.8.0"
 rand = "0.8.5"
-sha2 = "0.10.8"
 eframe = "0.29.1"
 egui = "0.29.1"
-rfd = "0.15"
+rfd = "0.15.1"
 chacha20poly1305 = "0.10.1"
 argon2 = "0.5.3"
-image = "0.24.3" # Add image crate
+image = "0.25.5" # Add image crate
+pqcrypto = "0.18.1"
 
 [lib]
 name = "encryption_app"
