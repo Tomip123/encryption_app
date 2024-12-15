@@ -2,13 +2,15 @@ use aes_gcm::aead::{self, Aead, KeyInit};
 use aes_gcm::{Aes128Gcm, Aes256Gcm};
 use argon2::{Argon2, Params};
 use chacha20poly1305::ChaCha20Poly1305;
+use image::GenericImageView;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::fs;
-use std::path::PathBuf;
+use std::path::PathBuf; // Remove Cursor
 
 const SALT_LEN: usize = 32;
 const NONCE_LEN: usize = 12;
+const END_MARKER: u8 = 0; // Add end marker
 
 // Enum for encryption algorithms
 #[derive(Debug, PartialEq)]
@@ -213,4 +215,58 @@ pub fn decrypt_file(
     fs::write(decrypted_path, plaintext)?;
 
     Ok(())
+}
+
+pub fn hide_data_in_image(path: &PathBuf, data: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let img = image::open(path)?;
+
+    let data_bytes = data.as_bytes();
+    let mut data_index = 0;
+
+    let (width, height) = img.dimensions();
+    let mut img_buffer = img.to_rgba8();
+
+    'outer: for y in 0..height {
+        for x in 0..width {
+            if data_index < data_bytes.len() {
+                let byte = data_bytes[data_index];
+                let pixel = img_buffer.get_pixel_mut(x, y);
+                pixel[0] = byte;
+                data_index += 1;
+            } else {
+                let pixel = img_buffer.get_pixel_mut(x, y);
+                pixel[0] = END_MARKER; // Add end marker
+                break 'outer;
+            }
+        }
+    }
+
+    let mut output_path = path.clone();
+    output_path.set_extension("hidden.png");
+    img_buffer.save(output_path)?;
+
+    Ok(())
+}
+
+pub fn extract_data_from_image(path: &PathBuf) -> Result<String, Box<dyn std::error::Error>> {
+    let img = image::open(path)?;
+
+    let mut data_bytes = Vec::new();
+
+    let (width, height) = img.dimensions();
+    let img_buffer = img.to_rgba8();
+
+    'outer: for y in 0..height {
+        for x in 0..width {
+            let pixel = img_buffer.get_pixel(x, y);
+            if pixel[0] != END_MARKER {
+                data_bytes.push(pixel[0]);
+            } else {
+                break 'outer;
+            }
+        }
+    }
+
+    let data = String::from_utf8_lossy(&data_bytes).to_string();
+    Ok(data)
 }
