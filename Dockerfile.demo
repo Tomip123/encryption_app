@@ -1,0 +1,27 @@
+# Builds the in-browser version (WebAssembly) for tomilahti.com.
+#   docker buildx build --file Dockerfile.demo --target dist --output type=local,dest=out .
+# The `dist` stage holds exactly the files to serve: index.html, start.js, app.js, app_bg.wasm.
+# The page loads only its own files, as the host's Content-Security-Policy requires.
+
+FROM docker.io/library/rust:1.93-bookworm AS build
+RUN rustup target add wasm32-unknown-unknown
+
+# The wasm-bindgen command line tool must be exactly the version of the wasm-bindgen crate in
+# Cargo.lock. cargo verifies the crates it downloads against the registry's checksums.
+ARG WASM_BINDGEN_VERSION=0.2.95
+RUN cargo install wasm-bindgen-cli --version "${WASM_BINDGEN_VERSION}" --locked
+
+WORKDIR /src
+COPY . .
+
+# Fail with a clear message, not a cryptic runtime error, if the two versions have drifted apart.
+RUN awk '/^name = "wasm-bindgen"$/{getline; print}' Cargo.lock | grep -q "\"${WASM_BINDGEN_VERSION}\"" \
+ || { echo "Cargo.lock uses a different wasm-bindgen than WASM_BINDGEN_VERSION=${WASM_BINDGEN_VERSION}: update the ARG in Dockerfile.demo" >&2; exit 1; }
+
+RUN cargo build --release --locked --target wasm32-unknown-unknown --bin encryption_app
+RUN wasm-bindgen --target web --no-typescript --out-dir /out --out-name app \
+      target/wasm32-unknown-unknown/release/encryption_app.wasm
+
+FROM scratch AS dist
+COPY --from=build /out/ /
+COPY web/ /

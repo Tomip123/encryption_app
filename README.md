@@ -64,7 +64,7 @@ cargo run --bin cli -- encrypt aes256gcm secret.txt mypassword123
 ## 🛠️ Technical Stack
 - **Language**: Rust
 - **UI Framework**: [egui](https://github.com/emilk/egui) / [eframe](https://github.com/emilk/egui/tree/master/crates/eframe)
-- **Crypto Libraries**: `aes-gcm`, `chacha20poly1305`, `argon2`, `pqcrypto`
+- **Crypto Libraries**: `aes-gcm`, `chacha20poly1305`, `argon2`
 - **Image Processing**: `image`
 - **File Dialogs**: `rfd`
 
@@ -72,3 +72,25 @@ cargo run --bin cli -- encrypt aes256gcm secret.txt mypassword123
 
 ## ⚖️ License
 This project is open-source and available under the MIT License.
+---
+
+## 🌐 Run it in your browser
+
+The same program also compiles to WebAssembly and runs entirely inside a web page. Nothing is uploaded: the program has no networking code, so files and passwords never leave your device. Choosing a file reads it into memory, and results are offered as a download.
+
+Build the web version (needs Docker, nothing else installed):
+
+```bash
+docker buildx build --file Dockerfile.demo --target dist --output type=local,dest=out .
+```
+
+`out/` then holds `index.html`, `start.js`, `app.js` and `app_bg.wasm`. Serve it with any static web server that sends `.wasm` files as `application/wasm`. The page loads only its own files, so it also works under a strict Content-Security-Policy (`script-src 'self' 'wasm-unsafe-eval'`).
+
+The **About** tab has a *Run self-test* button that checks all three ciphers, wrong-password and tamper detection, and the image feature on built-in sample data, in your own browser.
+
+### How it is organised
+
+- `src/lib.rs`: the cryptography. `encrypt_bytes` / `decrypt_bytes` and the image functions work on bytes in memory; `encrypt_file` and friends are thin wrappers for the desktop app and the CLI.
+- `src/files.rs`: the only code that differs between desktop and browser (picking a file, delivering a result).
+- `src/app.rs`, `src/ui/`: the interface, shared by both.
+- `cargo test` runs the unit tests.

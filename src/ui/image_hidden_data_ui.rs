@@ -1,34 +1,35 @@
+use crate::app::{EncryptionApp, PickTarget};
+use crate::files;
 use eframe::egui::{self, TextEdit};
-use encryption_app::{extract_data_from_image, hide_data_in_image};
-use rfd::FileDialog;
 
-pub fn image_hidden_data_ui(app: &mut crate::EncryptionApp, ui: &mut egui::Ui) {
+fn select_image(app: &mut EncryptionApp, ui: &mut egui::Ui) {
+    if ui.button("Select Image").clicked() {
+        app.pick_target = PickTarget::Image;
+        files::pick_file(&app.inbox, ui.ctx());
+    }
+
+    match &app.image {
+        Some(image) => ui.label(format!("Selected Image: {}", image.name)),
+        None => ui.label("No image selected."),
+    };
+}
+
+pub fn image_hidden_data_ui(app: &mut EncryptionApp, ui: &mut egui::Ui) {
     ui.heading("Image Hidden Data");
 
-    if ui.button("Select Image").clicked() {
-        if let Some(path) = FileDialog::new().pick_file() {
-            app.image_path = Some(path);
-            app.status_message.clear();
-        }
-    }
-
-    if let Some(path) = &app.image_path {
-        ui.label(format!("Selected Image: {}", path.display()));
-    } else {
-        ui.label("No image selected.");
-    }
+    select_image(app, ui);
 
     ui.label("Enter Data to Hide:");
     ui.add(TextEdit::multiline(&mut app.hidden_data).hint_text("Data"));
 
     if ui.button("Hide Data").clicked() {
-        if let Some(path) = &app.image_path {
-            match hide_data_in_image(path, &app.hidden_data) {
-                Ok(_) => {
-                    app.status_message = "Data hidden in image successfully.".to_string();
-                    app.image_path = None;
+        if let Some(image) = &app.image {
+            match files::hide_data(image, &app.hidden_data, &app.inbox) {
+                Ok(message) => {
+                    app.status_message = message;
+                    app.image = None;
                 }
-                Err(e) => app.status_message = format!("Failed to hide data: {}", e),
+                Err(e) => app.status_message = format!("Failed to hide data: {e}"),
             }
         } else {
             app.status_message = "Please select an image.".to_string();
@@ -38,28 +39,17 @@ pub fn image_hidden_data_ui(app: &mut crate::EncryptionApp, ui: &mut egui::Ui) {
     ui.separator();
     ui.heading("Extract Data from Image");
 
-    if ui.button("Select Image").clicked() {
-        if let Some(path) = FileDialog::new().pick_file() {
-            app.image_path = Some(path);
-            app.status_message.clear();
-        }
-    }
-
-    if let Some(path) = &app.image_path {
-        ui.label(format!("Selected Image: {}", path.display()));
-    } else {
-        ui.label("No image selected.");
-    }
+    select_image(app, ui);
 
     if ui.button("Extract Data").clicked() {
-        if let Some(path) = &app.image_path {
-            match extract_data_from_image(path) {
+        if let Some(image) = &app.image {
+            match files::extract_data(image) {
                 Ok(data) => {
                     app.extracted_data = data;
                     app.status_message = "Data extracted successfully.".to_string();
-                    app.image_path = None;
+                    app.image = None;
                 }
-                Err(e) => app.status_message = format!("Failed to extract data: {}", e),
+                Err(e) => app.status_message = format!("Failed to extract data: {e}"),
             }
         } else {
             app.status_message = "Please select an image.".to_string();

@@ -1,22 +1,38 @@
+use crate::app::{EncryptionApp, PickTarget};
+use crate::files::{self, PickedFile, SharedInbox};
 use eframe::egui::{self, TextEdit};
-use encryption_app::{decrypt_file, encrypt_file, EncryptionAlgorithms};
-use rfd::FileDialog;
+use encryption_app::EncryptionAlgorithms;
 
-pub fn file_encryption_ui(app: &mut crate::EncryptionApp, ui: &mut egui::Ui) {
+type Operation =
+    fn(&PickedFile, &str, EncryptionAlgorithms, &SharedInbox) -> Result<String, String>;
+
+/// Runs `operation` on the selected file and reports the outcome in the status line.
+fn run(app: &mut EncryptionApp, operation: Operation, failure: &str) {
+    let Some(file) = &app.file else {
+        app.status_message = "Please select a file.".to_string();
+        return;
+    };
+    match operation(file, &app.password, app.algorithm, &app.inbox) {
+        Ok(message) => {
+            app.status_message = message;
+            app.file = None;
+        }
+        Err(e) => app.status_message = format!("{failure}: {e}"),
+    }
+}
+
+pub fn file_encryption_ui(app: &mut EncryptionApp, ui: &mut egui::Ui) {
     ui.heading("File Encryption");
 
     if ui.button("Select File").clicked() {
-        if let Some(path) = FileDialog::new().pick_file() {
-            app.file_path = Some(path);
-            app.status_message.clear();
-        }
+        app.pick_target = PickTarget::File;
+        files::pick_file(&app.inbox, ui.ctx());
     }
 
-    if let Some(path) = &app.file_path {
-        ui.label(format!("Selected File: {}", path.display()));
-    } else {
-        ui.label("No file selected.");
-    }
+    match &app.file {
+        Some(file) => ui.label(format!("Selected File: {}", file.name)),
+        None => ui.label("No file selected."),
+    };
 
     ui.label("Enter Password:");
     ui.add(
@@ -48,43 +64,11 @@ pub fn file_encryption_ui(app: &mut crate::EncryptionApp, ui: &mut egui::Ui) {
         });
 
     if ui.button("Encrypt").clicked() {
-        if let Some(path) = &app.file_path {
-            let algo = match app.algorithm {
-                EncryptionAlgorithms::Aes256Gcm => EncryptionAlgorithms::Aes256Gcm,
-                EncryptionAlgorithms::Aes128Gcm => EncryptionAlgorithms::Aes128Gcm,
-                EncryptionAlgorithms::ChaCha20Poly1305 => EncryptionAlgorithms::ChaCha20Poly1305,
-            };
-
-            match encrypt_file(path, &app.password, algo) {
-                Ok(_) => {
-                    app.status_message = "File encrypted successfully.".to_string();
-                    app.file_path = None;
-                }
-                Err(e) => app.status_message = format!("Encryption failed: {}", e),
-            }
-        } else {
-            app.status_message = "Please select a file.".to_string();
-        }
+        run(app, files::encrypt, "Encryption failed");
     }
 
     if ui.button("Decrypt").clicked() {
-        if let Some(path) = &app.file_path {
-            let algo = match app.algorithm {
-                EncryptionAlgorithms::Aes256Gcm => EncryptionAlgorithms::Aes256Gcm,
-                EncryptionAlgorithms::Aes128Gcm => EncryptionAlgorithms::Aes128Gcm,
-                EncryptionAlgorithms::ChaCha20Poly1305 => EncryptionAlgorithms::ChaCha20Poly1305,
-            };
-
-            match decrypt_file(path, &app.password, algo) {
-                Ok(_) => {
-                    app.status_message = "File decrypted successfully.".to_string();
-                    app.file_path = None;
-                }
-                Err(e) => app.status_message = format!("Decryption failed: {}", e),
-            }
-        } else {
-            app.status_message = "Please select a file.".to_string();
-        }
+        run(app, files::decrypt, "Decryption failed");
     }
 
     if !app.status_message.is_empty() {

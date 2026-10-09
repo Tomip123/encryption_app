@@ -13,7 +13,6 @@ rfd = "0.15.1"
 chacha20poly1305 = "0.10.1"
 argon2 = "0.5.3"
 image = "0.25.5" # Add image crate
-pqcrypto = "0.18.1"
 
 [lib]
 name = "encryption_app"
@@ -22,3 +21,11 @@ path = "src/lib.rs"
 [[bin]]
 name = "cli"
 path = "src/bin/cli.rs"
+
+# Browser build only. Native builds and the CLI are unaffected.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Random salts and nonces: in a browser the OS random source is crypto.getRandomValues, which
+# getrandom reaches only with its `js` feature.
+getrandom = { version = "0.2", features = ["js"] }
+# Runs the async file picker (rfd) in the browser; the standard library has no executor for it.
+wasm-bindgen-futures = "0.4"
